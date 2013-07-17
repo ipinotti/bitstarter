@@ -21,11 +21,17 @@ References:
    - https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
 */
 
+var sys = require('util');
+var rest = require('restler');
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var HTMLURL_DEFAULT = "http://agile-tundra-3038.herokuapp.com";
+var HTMLFILE_DEFAULT = "index.html";
+var CHECKSFILE_DEFAULT = "checks.json";
+var HTMLTEMP = "temp.html";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -34,6 +40,21 @@ var assertFileExists = function(infile) {
         process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
     }
     return instr;
+};
+
+var assertUrlExists = function(exUrl) {
+    var instr = rest.get(exUrl).on('complete', function(result) {
+		if (result instanceof Error) {
+//    			sys.puts('Error: ' + result.message);
+		        console.log("%s does not exist. Exiting.", exUrl);
+//    			this.retry(5000); // try again after 5 sec
+			process.exit(1);
+  		}
+		//else {
+    		//	sys.puts(result);
+  		//}
+		});
+    return instr.toString();
 };
 
 var cheerioHtmlFile = function(htmlfile) {
@@ -52,7 +73,27 @@ var checkHtmlFile = function(htmlfile, checksfile) {
         var present = $(checks[ii]).length > 0;
         out[checks[ii]] = present;
     }
-    return out;
+    return out;	
+};
+
+var getJson = function(checkJson) {
+    var outJson = JSON.stringify(checkJson, null, 4);
+    console.log(outJson);
+};
+
+var checkUrl = function(result, response) {
+//    console.log ("Inside CheckUrl");
+    var checksfile = program.checks;
+    $ = cheerio.load(result);
+    var checks = loadChecks(checksfile).sort();
+    var out = {};
+    for(var ii in checks) {
+        var present = $(checks[ii]).length > 0;
+	    out[checks[ii]] = present;
+	}
+//    console.log("before getJson");
+    getJson(out);
+    return checkUrl;
 };
 
 var clone = function(fn) {
@@ -64,11 +105,21 @@ var clone = function(fn) {
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+    	.option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists))		
+    	.option('-u, --url <http://>', 'URL')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    
+    if (program.file) {
+//	console.log ("checkHtmlFile");
+	var checkJson = checkHtmlFile(program.file, program.checks);
+   	getJson(checkJson);
+    	process.exit(1);
+    }
+    
+    if (program.url) {
+ //   	console.log ("checkUrl");
+        rest.get(program.url).on('complete', checkUrl);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
